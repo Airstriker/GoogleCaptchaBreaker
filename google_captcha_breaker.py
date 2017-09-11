@@ -32,8 +32,9 @@ LONG_MAX_RAND   = 11.1
 NUMBER_OF_ITERATIONS = 100
 RECAPTCHA_PAGE_URL = "https://www.google.com/recaptcha/api2/demo"
 
-HOUNDIFY_CLIENT_ID = "uvNWMwJR6_O5hYrIz0W0_Q=="
-HOUNDIFY_CLIENT_KEY = "FwI01VFtE_ClmgDJNKZKJFWDqJbKjgVjH6apbYIvYW4-MJejN7sThBy3T85P3a0NSjC6lQJ292HNlw-v9plfjw=="
+# Register at https://www.houndify.com and use your CLIENT_ID and CLIENT_KEY.
+HOUNDIFY_CLIENT_ID = "{!!! CHANGE IT HERE !!!}"
+HOUNDIFY_CLIENT_KEY = "{!!! CHANGE IT HERE !!!}"
 
 DIGITS_DICT = {
                 "zero": "0",
@@ -177,7 +178,7 @@ class rebreakcaptcha(object):
         except sr.UnknownValueError:
             print("[{0}] Google Speech Recognition could not understand audio".format(self.current_iteration))
         except sr.RequestError as e:
-            print("[{0}] Could not request results from Google Speech Recognition service; {1}".format(self.current_iteration).format(e))
+            print("[{0}] Could not request results from Google Speech Recognition service; {1}".format(self.current_iteration, e))
             
         return audio_output
     
@@ -243,7 +244,7 @@ class rebreakcaptcha(object):
                 # Click on submit
                 self.driver.switch_to.default_content()
                 self.driver.find_element_by_xpath('//input[@id="recaptcha-demo-submit"]').click()
-                time.sleep(random.uniform(LONG_MIN_RAND, LONG_MAX_RAND))
+                time.sleep(MIN_RAND)
                 return True
             else:
                 return False
@@ -286,8 +287,7 @@ def main():
         rebreakcaptcha_obj = rebreakcaptcha()
         if rebreakcaptcha_obj.solve(i):
             counter += 1
-            
-        time.sleep(random.uniform(LONG_MIN_RAND, LONG_MAX_RAND))
+
         print("Successful breaks: {0}".format(counter))
         
     print("Total successful breaks: {0}\{1}".format(counter, NUMBER_OF_ITERATIONS))
