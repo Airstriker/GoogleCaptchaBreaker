@@ -96,7 +96,11 @@ class rebreakcaptcha(object):
     def get_recaptcha_challenge(self):
         while 1:
             # Navigate to a ReCaptcha page
-            self.driver.get(RECAPTCHA_PAGE_URL)
+            try:
+                self.driver.get(RECAPTCHA_PAGE_URL)
+            except Exception as e:
+                print("[{}] Couldn't connect to page: {}. Error: {}".format(self.current_iteration, RECAPTCHA_PAGE_URL, repr(e)))
+                return False
             time.sleep(random.uniform(MIN_RAND, MAX_RAND))
 
             # Get all the iframes on the page
@@ -113,7 +117,7 @@ class rebreakcaptcha(object):
 
             # Click on ReCaptcha checkbox
             self.driver.find_element_by_xpath('//div[@class="recaptcha-checkbox-checkmark" and @role="presentation"]').click()
-            time.sleep(random.uniform(LONG_MIN_RAND, LONG_MAX_RAND))
+            time.sleep(LONG_MIN_RAND)
 
             # Check if the ReCaptcha has no challenge
             if self.is_exists_by_xpath('//span[@aria-checked="true"]'):
@@ -134,51 +138,77 @@ class rebreakcaptcha(object):
         print("[{0}] Clicking on audio challenge...".format(self.current_iteration))
         # Click on the audio challenge button
         self.driver.find_element_by_xpath('//button[@id="recaptcha-audio-button"]').click()
-        time.sleep(random.uniform(MIN_RAND, MAX_RAND))
+        time.sleep(LONG_MIN_RAND)
 
         return True
     
     def get_challenge_audio(self, url):
-        converted_audio = None
         # Download the challenge audio and store in memory
         try:
-            request = requests.get(url)
-            audio_file = io.BytesIO(request.content)
+            request = requests.get(url, verify=True, timeout=3)
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+            print("Couldn't download the challenge audio: ".format(repr(e)))
+            return None
 
+        audio_file = io.BytesIO(request.content)
+
+        # If we don't use houndify, we don't have to convert the audio file to wav file.
+        return audio_file
+
+        # *******************************************
+        # Uncomment below if you want to use houndify
+        # *******************************************
+
+        '''
             # Convert the audio to a compatible format in memory
             converted_audio = io.BytesIO()
-            sound = AudioSegment.from_mp3(audio_file)
+            try:
+                sound = AudioSegment.from_file(audio_file)
+            except Exception as e:
+                print("[{}] Exception when opening audio file. Error: {}".format(self.current_iteration, repr(e)))
+                return converted_audio
+    
             sound.export(converted_audio, format="wav")
             converted_audio.seek(0)
-        except:
-            print("[{0}] Exception when converting mp3 to wav...".format(self.current_iteration))
+    
+            return converted_audio
+        '''
 
-        return converted_audio
-        
     def string_to_digits(self, recognized_string):
         return ''.join([DIGITS_DICT.get(word, "") for word in recognized_string.split(" ")])
     
     def speech_to_text(self, audio_source):
         # Initialize a new recognizer with the audio in memory as source
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(audio_source) as source:
-            audio = recognizer.record(source) # read the entire audio file
-
         audio_output = ""
+        recognizer = sr.Recognizer()
+        try:
+            with sr.AudioFile(audio_source) as source:
+                audio = recognizer.record(source)  # read the entire audio file
+        except Exception as e:
+            print("[{0}] Audio file could not be read: {1}".format(self.current_iteration, repr(e)))
+            return audio_output
+
         # recognize speech using Google Speech Recognition
         try:
             audio_output = recognizer.recognize_google(audio)
             print("[{0}] Google Speech Recognition: ".format(self.current_iteration) + audio_output)
             # Check if we got harder audio captcha
+            # ************************************
+            # Uncomment the code below only if you want to use houndify
+            # ************************************
+            '''
             if any(character.isalpha() for character in audio_output):
                 # Use Houndify to detect the harder audio captcha
                 print("[{0}] Fallback to Houndify!".format(self.current_iteration))
                 audio_output = self.string_to_digits(recognizer.recognize_houndify(audio, client_id=HOUNDIFY_CLIENT_ID, client_key=HOUNDIFY_CLIENT_KEY))
                 print("[{0}] Houndify: ".format(self.current_iteration) + audio_output)
+            '''
         except sr.UnknownValueError:
             print("[{0}] Google Speech Recognition could not understand audio".format(self.current_iteration))
         except sr.RequestError as e:
-            print("[{0}] Could not request results from Google Speech Recognition service; {1}".format(self.current_iteration, e))
+            print("[{}] Could not request results from Google Speech Recognition service; {}".format(self.current_iteration, repr(e)))
+        except Exception as e:
+            print("[{}] Error at Google Speech Recognition: {}".format(self.current_iteration, repr(e)))
             
         return audio_output
     
@@ -221,7 +251,7 @@ class rebreakcaptcha(object):
 
         # Enter the audio challenge solution
         self.driver.find_element_by_id('audio-response').send_keys(audio_output)
-        time.sleep(random.uniform(LONG_MIN_RAND, LONG_MAX_RAND))
+        time.sleep(LONG_MIN_RAND)
 
         # Click on verify
         self.driver.find_element_by_id('recaptcha-verify-button').click()
@@ -242,6 +272,7 @@ class rebreakcaptcha(object):
             self.driver.switch_to_frame(iframes[0])
             if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
                 # Click on submit
+                print("[{0}] Clicking Submit...".format(self.current_iteration))
                 self.driver.switch_to.default_content()
                 self.driver.find_element_by_xpath('//input[@id="recaptcha-demo-submit"]').click()
                 time.sleep(MIN_RAND)
@@ -265,10 +296,16 @@ class rebreakcaptcha(object):
         
         # Check if there is another audio challenge and solve it too
         while self.is_exists_by_xpath('//div[@class="rc-audiochallenge-error-message"]') and \
-                self.is_exists_by_xpath('//div[contains(text(), "Multiple correct solutions required")]'):
+                self.is_exists_by_xpath('//div[contains(text(), "Multiple correct solutions required")]'):  #These divs don't disappear, that's why we need a break condition below
             print("[{0}] Need to solve more. Let's do this!".format(self.current_iteration))
             if not self.solve_audio_challenge():
                 return False
+            else:
+                # Switch to the ReCaptcha iframe to verify it is solved
+                self.driver.switch_to.default_content()
+                self.driver.switch_to_frame(iframes[0])
+                if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
+                    break
             
         # Switch to the ReCaptcha iframe to verify it is solved
         self.driver.switch_to.default_content()
@@ -276,6 +313,7 @@ class rebreakcaptcha(object):
         
         if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
             # Click on submit
+            print("[{0}] Clicking Submit...".format(self.current_iteration))
             self.driver.switch_to.default_content()
             self.driver.find_element_by_xpath('//input[@id="recaptcha-demo-submit"]').click()
             time.sleep(MIN_RAND)
@@ -287,7 +325,7 @@ def main():
         rebreakcaptcha_obj = rebreakcaptcha()
         if rebreakcaptcha_obj.solve(i):
             counter += 1
-
+        rebreakcaptcha_obj.driver.close()
         print("Successful breaks: {0}".format(counter))
         
     print("Total successful breaks: {0}\{1}".format(counter, NUMBER_OF_ITERATIONS))
