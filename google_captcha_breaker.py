@@ -152,27 +152,18 @@ class rebreakcaptcha(object):
 
         audio_file = io.BytesIO(request.content)
 
-        # If we don't use houndify, we don't have to convert the audio file to wav file.
-        return audio_file
+        # Convert the audio to a compatible format in memory
+        converted_audio = io.BytesIO()
+        try:
+            sound = AudioSegment.from_file(audio_file)
+        except Exception as e:
+            print("[{}] Exception when trying to convert audio file. Error: {}. Using oryginal file...".format(self.current_iteration, repr(e)))
+            return audio_file
 
-        # *******************************************
-        # Uncomment below if you want to use houndify
-        # *******************************************
+        sound.export(converted_audio, format="wav")
+        converted_audio.seek(0)
 
-        '''
-            # Convert the audio to a compatible format in memory
-            converted_audio = io.BytesIO()
-            try:
-                sound = AudioSegment.from_file(audio_file)
-            except Exception as e:
-                print("[{}] Exception when opening audio file. Error: {}".format(self.current_iteration, repr(e)))
-                return converted_audio
-    
-            sound.export(converted_audio, format="wav")
-            converted_audio.seek(0)
-    
-            return converted_audio
-        '''
+        return converted_audio
 
     def string_to_digits(self, recognized_string):
         return ''.join([DIGITS_DICT.get(word, "") for word in recognized_string.split(" ")])
