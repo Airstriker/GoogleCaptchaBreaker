@@ -107,7 +107,8 @@ class rebreakcaptcha(object):
             iframes = self.driver.find_elements_by_tag_name("iframe")
 
             # Switch focus to ReCaptcha iframe
-            self.driver.switch_to_frame(iframes[0])
+            self.driver.switch_to.frame(iframes[0])
+            self.current_frame = iframes[0]
             time.sleep(random.uniform(MIN_RAND, MAX_RAND))
 
             # Verify ReCaptcha checkbox is present
@@ -128,7 +129,8 @@ class rebreakcaptcha(object):
             
     def get_audio_challenge(self, iframes):
         # Switch to the last iframe (the new one)
-        self.driver.switch_to_frame(iframes[-1])
+        self.driver.switch_to.frame(iframes[-1])
+        self.current_frame = iframes[-1]
         
         # Check if the audio challenge button is present
         if not self.is_exists_by_xpath('//button[@id="recaptcha-audio-button"]'):
@@ -260,7 +262,8 @@ class rebreakcaptcha(object):
             self.driver.switch_to.default_content()
             # Switch to the ReCaptcha iframe to verify it is solved
             iframes = self.driver.find_elements_by_tag_name("iframe")
-            self.driver.switch_to_frame(iframes[0])
+            self.driver.switch_to.frame(iframes[0])
+            self.current_frame = iframes[0]
             if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
                 # Click on submit
                 print("[{0}] Clicking Submit...".format(self.current_iteration))
@@ -294,13 +297,20 @@ class rebreakcaptcha(object):
             else:
                 # Switch to the ReCaptcha iframe to verify it is solved
                 self.driver.switch_to.default_content()
-                self.driver.switch_to_frame(iframes[0])
+                previous_frame = self.current_frame
+                self.driver.switch_to.frame(iframes[0])
+                self.current_frame = iframes[0]
                 if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
                     break
+                else:
+                    self.driver.switch_to.default_content()
+                    self.driver.switch_to.frame(previous_frame)
+                    self.current_frame = previous_frame
             
         # Switch to the ReCaptcha iframe to verify it is solved
         self.driver.switch_to.default_content()
-        self.driver.switch_to_frame(iframes[0])
+        self.driver.switch_to.frame(iframes[0])
+        self.current_frame = iframes[0]
         
         if self.is_exists_by_xpath('//span[@aria-checked="true"]'):  # I'm not a robot...
             # Click on submit
